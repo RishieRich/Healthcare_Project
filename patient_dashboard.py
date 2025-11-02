@@ -24,9 +24,22 @@ class PatientDashboard:
 
     def fetch_patient_by_age(self, patient_discharge_df: pd.DataFrame, patient_details_df: pd.DataFrame) -> pd.DataFrame:
         """Return patient details sorted by maximum age."""
-        patient_discharge_df['age'] = patient_discharge_df.registrationno.map(
-            patient_details_df.set_index("registrationno")['age']
+        patient_details_by_reg = patient_details_df.set_index("registrationno")
+
+        missing_registrations = set(patient_discharge_df["registrationno"]) - set(patient_details_by_reg.index)
+        if missing_registrations:
+            missing_list = ", ".join(str(reg) for reg in sorted(missing_registrations))
+            raise ValueError(
+                f"Registration numbers not found in patient details: {missing_list}"
+            )
+
+        patient_discharge_copy = patient_discharge_df.copy()
+        patient_discharge_copy["age"] = patient_discharge_copy["registrationno"].map(
+            patient_details_by_reg["age"]
         )
+
+        patient_discharge_copy = patient_discharge_copy.dropna(subset=["age"])
+
         cols = [
             "registrationno",
             "phone",
@@ -37,7 +50,7 @@ class PatientDashboard:
             "statename",
             "added_amt",
         ]
-        patient_discharge_max_age_df = patient_discharge_df[cols]
+        patient_discharge_max_age_df = patient_discharge_copy[cols]
         return patient_discharge_max_age_df.sort_values(by=['age'], ascending=False)
 
     def to_csv(self, df: pd.DataFrame, path: str) -> bool:
