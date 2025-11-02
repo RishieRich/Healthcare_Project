@@ -1,3 +1,5 @@
+from typing import Optional, Sequence
+
 import pandas as pd
 
 class PatientDashboard:
@@ -7,10 +9,44 @@ class PatientDashboard:
         """Read a CSV file with comma delimiter and return a DataFrame."""
         return pd.read_csv(path, header=0, delimiter=',')
 
-    def add_total_expense_column(self, patient_discharge_df: pd.DataFrame) -> pd.DataFrame:
-        """Append 'added_amt' column with the sum of expenses for each patient."""
-        patient_discharge_df['added_amt'] = patient_discharge_df.iloc[:, 11:20].sum(axis=1)
-        return patient_discharge_df
+    def add_total_expense_column(
+        self,
+        patient_discharge_df: pd.DataFrame,
+        expense_columns: Optional[Sequence[str]] = None,
+        expense_prefix: Optional[str] = "expense_",
+    ) -> pd.DataFrame:
+        """Append 'added_amt' column with the sum of expenses for each patient.
+
+        The expense columns can be supplied explicitly through ``expense_columns`` or
+        inferred by matching the provided ``expense_prefix`` (``"expense_"`` by
+        default). All referenced columns must exist otherwise a ``ValueError`` is
+        raised. Values are coerced to numeric to ensure non-numeric entries do not
+        cause runtime errors during aggregation.
+        """
+
+        df = patient_discharge_df
+
+        if expense_columns:
+            missing_columns = [col for col in expense_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(
+                    "Missing required expense columns: " + ", ".join(missing_columns)
+                )
+            expense_fields = expense_columns
+        else:
+            if not expense_prefix:
+                raise ValueError(
+                    "Either expense_columns must be provided or a valid expense_prefix must be set."
+                )
+            expense_fields = [col for col in df.columns if col.startswith(expense_prefix)]
+            if not expense_fields:
+                raise ValueError(
+                    f"No expense columns found with prefix '{expense_prefix}'."
+                )
+
+        expense_values = df[expense_fields].apply(pd.to_numeric, errors="coerce").fillna(0)
+        df["added_amt"] = expense_values.sum(axis=1)
+        return df
 
     def fetch_patient_phone(self, patient_discharge_df: pd.DataFrame, order: str) -> pd.DataFrame:
         """Return top or bottom 10 patients based on 'added_amt'."""
